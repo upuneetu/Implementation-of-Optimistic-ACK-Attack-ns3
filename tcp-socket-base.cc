@@ -2345,7 +2345,7 @@ TcpSocketBase::Destroy6 (void)
 void
 TcpSocketBase::SendEmptyPacket (uint8_t flags)
 {
-  m_status++;
+ 
   NS_LOG_FUNCTION (this << (uint32_t)flags);
   Ptr<Packet> p = Create<Packet> ();
 
@@ -2415,15 +2415,15 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
   header.SetFlags (flags);
   header.SetSequenceNumber (s);
   header.SetAckNumber (m_rxBuffer->NextRxSequence ());
-  if(flags & TcpHeader::ACK)
-  printf("\nsegSize:%d ACKNumber:%d s.getValue():%d\n",m_tcb->m_segmentSize,m_rxBuffer->NextRxSequence().GetValue(),s.GetValue());
+
   if(privateTest==true)
   {
-    printf("\nwe send here\n");
-        header.SetAckNumber (m_rxBuffer->NextRxSequence ()+2*m_tcb->m_segmentSize);
-    //printf("\nWe came here status:%d nextRxSeq:%d\n",m_status,m_rxBuffer->NextRxSequence().GetValue());
-    //printf("\nsegSize:%d nextSeqNum:%d\n",m_tcb->m_segmentSize,m_rxBuffer->NextRxSequence().GetValue());
+  
+    printf("we send our ACK here %d :",m_status);
+    header.SetAckNumber (m_rxBuffer->NextRxSequence ()+m_status*m_tcb->m_segmentSize);
   }
+    if(flags & TcpHeader::ACK && !(flags & TcpHeader::SYN))
+        printf("segSize:%d ACKNumber:%d seqNumber:%d\n",m_tcb->m_segmentSize,header.GetAckNumber().GetValue(),s.GetValue());
   
   if (m_endPoint != 0)
     {
@@ -3131,6 +3131,7 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
           m_delAckCount = 0;
           SendEmptyPacket (TcpHeader::ACK);
           privateTest=true;
+          m_status = 1;
           SendEmptyPacket (TcpHeader::ACK);
           privateTest=false;
         }
