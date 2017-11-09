@@ -2421,11 +2421,11 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
     
     if(privateTest)
     {
-        printf("we send our ACK here %d :",m_status);
+        printf("\nwe send our ACK here %d :",m_status);
         header.SetAckNumber (m_rxBuffer->NextRxSequence ()+m_status*m_tcb->m_segmentSize);
     }
     
-    printf("segSize:%d ACKNumber:%d seqNumber:%d\n",m_tcb->m_segmentSize,header.GetAckNumber().GetValue(),s.GetValue());
+    printf("segSize:%d ACKNumber:%d seqNumber:%d RoughPacketIndex:%f\n",m_tcb->m_segmentSize,header.GetAckNumber().GetValue(),s.GetValue(),header.GetAckNumber().GetValue()*1.0/m_tcb->m_segmentSize);
 
     
   }
@@ -3095,7 +3095,7 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
   SequenceNumber32 expectedSeq = m_rxBuffer->NextRxSequence ();
   if (!m_rxBuffer->Add (p, tcpHeader))
     { // Insert failed: No data or RX buffer full
-
+        
       SendEmptyPacket (TcpHeader::ACK);
       return;
     }
@@ -3134,16 +3134,20 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
     { // In-sequence packet: ACK if delayed ack count allows
       if (++m_delAckCount >= m_delAckMaxCount)
         {
+  
           m_delAckEvent.Cancel ();
           m_delAckCount = 0;
           SendEmptyPacket (TcpHeader::ACK);
-          privateTest=true;
+            
           m_status = 1;
-         // SendEmptyPacket (TcpHeader::ACK);
+          privateTest=true;
+          //SendEmptyPacket (TcpHeader::ACK);
           privateTest=false;
+          
         }
       else if (m_delAckEvent.IsExpired ())
         {
+          
           m_delAckEvent = Simulator::Schedule (m_delAckTimeout,
                                                &TcpSocketBase::DelAckTimeout, this);
           NS_LOG_LOGIC (this << " scheduled delayed ACK at " <<
