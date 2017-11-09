@@ -2416,14 +2416,21 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
   header.SetSequenceNumber (s);
   header.SetAckNumber (m_rxBuffer->NextRxSequence ());
 
-  if(privateTest==true)
+  if(flags & TcpHeader::ACK && !(flags & TcpHeader::SYN) && header.GetAckNumber().GetValue()!=1&&header.GetAckNumber().GetValue()!=2)
   {
-  
-    printf("we send our ACK here %d :",m_status);
-    header.SetAckNumber (m_rxBuffer->NextRxSequence ()+m_status*m_tcb->m_segmentSize);
+    
+    if(privateTest)
+    {
+        printf("we send our ACK here %d :",m_status);
+        header.SetAckNumber (m_rxBuffer->NextRxSequence ()+m_status*m_tcb->m_segmentSize);
+    }
+    
+    printf("segSize:%d ACKNumber:%d seqNumber:%d\n",m_tcb->m_segmentSize,header.GetAckNumber().GetValue(),s.GetValue());
+
+    
   }
-    if(flags & TcpHeader::ACK && !(flags & TcpHeader::SYN))
-        printf("segSize:%d ACKNumber:%d seqNumber:%d\n",m_tcb->m_segmentSize,header.GetAckNumber().GetValue(),s.GetValue());
+    
+    
   
   if (m_endPoint != 0)
     {
@@ -3132,7 +3139,7 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
           SendEmptyPacket (TcpHeader::ACK);
           privateTest=true;
           m_status = 1;
-          SendEmptyPacket (TcpHeader::ACK);
+         // SendEmptyPacket (TcpHeader::ACK);
           privateTest=false;
         }
       else if (m_delAckEvent.IsExpired ())
