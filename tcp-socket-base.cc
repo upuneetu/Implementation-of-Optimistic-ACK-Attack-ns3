@@ -3141,7 +3141,7 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
             
           m_status = 1;
           privateTest=true;
-          //SendEmptyPacket (TcpHeader::ACK);
+          SendEmptyPacket (TcpHeader::ACK);
           privateTest=false;
           
         }
