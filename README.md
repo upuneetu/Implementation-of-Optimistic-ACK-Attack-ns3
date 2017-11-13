@@ -9,7 +9,7 @@ Contributors:
 * Anishcharith 15CO108
 * Rajesh 15CO138
 
-Reasult of Optimistic ACKing
+Result of Optimistic ACKing
 
 ![plot](https://github.com/pun97/Optimistic-ACKing-Attack/blob/master/plot.png)
 
