@@ -1,5 +1,5 @@
-# Optimistic-ACKing-Attack
-Implementation of an attack on a system which uses TCP at its transport layer by sending ACKs before the data is received.
+# Implementation of Optimistic ACK attack on ns3
+It involves optimisitcally send ACK packets before the data is received. This may damage end-to-end reliability, but it can cause the sender to increase their congestion window (cwnd) size very fast and arbitrarily large. The premature ACKs will cause sender to assume the corresponding data has been received, even if it is still in flight. This attack is particularly dangerous because missing ACKs are TCP's signal for congestion. Optimistic ACKs can therefore mask this signal and cause serious network issues.
 
 https://cseweb.ucsd.edu/~savage/papers/CCR99.pdf
 
