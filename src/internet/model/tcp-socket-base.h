@@ -660,6 +660,8 @@ protected:
    *
    * \param flags the packet's flags
    */
+//  virtual void SendEmptyPacket (uint8_t flags);
+  
   virtual void SendEmptyPacket (uint8_t flags);
 
   /**
@@ -1072,6 +1074,8 @@ protected:
   static uint32_t SafeSubtraction (uint32_t a, uint32_t b);
 
 protected:
+  
+
   // Counters and events
   EventId           m_retxEvent;       //!< Retransmission event
   EventId           m_lastAckEvent;    //!< Last ACK timeout event
@@ -1131,6 +1135,7 @@ protected:
 
   // Options
   bool    m_sackEnabled;       //!< RFC SACK option enabled
+  bool    m_OptAckEnabled;
   bool    m_winScalingEnabled; //!< Window Scale option enabled (RFC 7323)
   uint8_t m_rcvWindShift;      //!< Window shift to apply to outgoing segments
   uint8_t m_sndWindShift;      //!< Window shift to apply to incoming segments
@@ -1151,7 +1156,8 @@ protected:
 
   // Guesses over the other connection end
   bool m_isFirstPartialAck; //!< First partial ACK during RECOVERY
-
+  bool optAckTest;
+  uint32_t m_ackStep;
   // The following two traces pass a packet with a TCP header
   TracedCallback<Ptr<const Packet>, const TcpHeader&,
                  Ptr<const TcpSocketBase> > m_txTrace; //!< Trace of transmitted packets

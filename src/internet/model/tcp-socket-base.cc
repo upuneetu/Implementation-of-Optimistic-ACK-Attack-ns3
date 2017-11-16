@@ -100,6 +100,10 @@ TcpSocketBase::GetTypeId (void)
                    BooleanValue (true),
                    MakeBooleanAccessor (&TcpSocketBase::m_sackEnabled),
                    MakeBooleanChecker ())
+    .AddAttribute ("Opt-Ack", "Enable or disable Optimistic Acking option",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&TcpSocketBase::m_OptAckEnabled),
+                   MakeBooleanChecker ())
     .AddAttribute ("Timestamp", "Enable or disable Timestamp option",
                    BooleanValue (true),
                    MakeBooleanAccessor (&TcpSocketBase::m_timestampEnabled),
@@ -321,6 +325,7 @@ TcpSocketBase::TcpSocketBase (void)
     m_bytesAckedNotProcessed (0),
     m_bytesInFlight (0),
     m_sackEnabled (false),
+    m_OptAckEnabled (false),
     m_winScalingEnabled (false),
     m_rcvWindShift (0),
     m_sndWindShift (0),
@@ -332,7 +337,9 @@ TcpSocketBase::TcpSocketBase (void)
     m_retxThresh (3),
     m_limitedTx (false),
     m_congestionControl (0),
-    m_isFirstPartialAck (true)
+    m_isFirstPartialAck (true),
+    optAckTest(false),
+    m_ackStep(0)
 {
   NS_LOG_FUNCTION (this);
   m_rxBuffer = CreateObject<TcpRxBuffer> ();
@@ -399,6 +406,7 @@ TcpSocketBase::TcpSocketBase (const TcpSocketBase& sock)
     m_bytesAckedNotProcessed (sock.m_bytesAckedNotProcessed),
     m_bytesInFlight (sock.m_bytesInFlight),
     m_sackEnabled (sock.m_sackEnabled),
+    m_OptAckEnabled (sock.m_OptAckEnabled),
     m_winScalingEnabled (sock.m_winScalingEnabled),
     m_rcvWindShift (sock.m_rcvWindShift),
     m_sndWindShift (sock.m_sndWindShift),
@@ -408,8 +416,11 @@ TcpSocketBase::TcpSocketBase (const TcpSocketBase& sock)
     m_retxThresh (sock.m_retxThresh),
     m_limitedTx (sock.m_limitedTx),
     m_isFirstPartialAck (sock.m_isFirstPartialAck),
+    optAckTest(false),
+    m_ackStep(0),
     m_txTrace (sock.m_txTrace),
     m_rxTrace (sock.m_rxTrace)
+
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_LOGIC ("Invoked the copy constructor");
@@ -2336,11 +2347,14 @@ TcpSocketBase::Destroy6 (void)
 }
 
 /* Send an empty packet with specified TCP flags */
+
 void
 TcpSocketBase::SendEmptyPacket (uint8_t flags)
 {
+ 
   NS_LOG_FUNCTION (this << (uint32_t)flags);
   Ptr<Packet> p = Create<Packet> ();
+
   TcpHeader header;
   SequenceNumber32 s = m_tcb->m_nextTxSequence;
 
@@ -2355,6 +2369,7 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
       SocketIpTosTag ipTosTag;
       ipTosTag.SetTos (GetIpTos ());
       p->AddPacketTag (ipTosTag);
+      
     }
 
   if (IsManualIpv6Tclass ())
@@ -2362,6 +2377,7 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
       SocketIpv6TclassTag ipTclassTag;
       ipTclassTag.SetTclass (GetIpv6Tclass ());
       p->AddPacketTag (ipTclassTag);
+      
     }
 
   if (IsManualIpTtl ())
@@ -2376,6 +2392,7 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
       SocketIpv6HopLimitTag ipHopLimitTag;
       ipHopLimitTag.SetHopLimit (GetIpv6HopLimit ());
       p->AddPacketTag (ipHopLimitTag);
+      
     }
 
   uint8_t priority = GetPriority ();
@@ -2384,6 +2401,7 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
       SocketPriorityTag priorityTag;
       priorityTag.SetPriority (priority);
       p->ReplacePacketTag (priorityTag);
+      
     }
 
   if (m_endPoint == 0 && m_endPoint6 == 0)
@@ -2403,6 +2421,17 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
   header.SetFlags (flags);
   header.SetSequenceNumber (s);
   header.SetAckNumber (m_rxBuffer->NextRxSequence ());
+
+  if(flags & TcpHeader::ACK && !(flags & TcpHeader::SYN) && header.GetAckNumber().GetValue()!=1&&header.GetAckNumber().GetValue()!=2)
+  	{
+      if(optAckTest)
+    	{
+          header.SetAckNumber (m_rxBuffer->NextRxSequence ()+m_ackStep*m_tcb->m_segmentSize);
+    	}
+    }
+    
+    
+  
   if (m_endPoint != 0)
     {
       header.SetSourcePort (m_endPoint->GetLocalPort ());
@@ -2494,9 +2523,15 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
       NS_LOG_LOGIC ("Schedule retransmission timeout at time "
                     << Simulator::Now ().GetSeconds () << " to expire at time "
                     << (Simulator::Now () + m_rto.Get ()).GetSeconds ());
+
       m_retxEvent = Simulator::Schedule (m_rto, &TcpSocketBase::SendEmptyPacket, this, flags);
     }
 }
+
+
+
+
+
 
 /* This function closes the endpoint completely. Called upon RST_TX action. */
 void
@@ -3060,12 +3095,14 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
   SequenceNumber32 expectedSeq = m_rxBuffer->NextRxSequence ();
   if (!m_rxBuffer->Add (p, tcpHeader))
     { // Insert failed: No data or RX buffer full
+        
       SendEmptyPacket (TcpHeader::ACK);
       return;
     }
   // Notify app to receive if necessary
   if (expectedSeq < m_rxBuffer->NextRxSequence ())
     { // NextRxSeq advanced, we have something to send to the app
+
       if (!m_shutdownRecv)
         {
           NotifyDataRecv ();
@@ -3083,28 +3120,45 @@ TcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
           return;
         }
     }
+    
+    
+    
   // Now send a new ACK packet acknowledging all received and delivered data
   if (m_rxBuffer->Size () > m_rxBuffer->Available () || m_rxBuffer->NextRxSequence () > expectedSeq + p->GetSize ())
     { // A gap exists in the buffer, or we filled a gap: Always ACK
+     
       SendEmptyPacket (TcpHeader::ACK);
+      
     }
   else
     { // In-sequence packet: ACK if delayed ack count allows
       if (++m_delAckCount >= m_delAckMaxCount)
         {
+  
           m_delAckEvent.Cancel ();
           m_delAckCount = 0;
+
           SendEmptyPacket (TcpHeader::ACK);
+          
+          if(m_OptAckEnabled){
+          
+              optAckTest=true;
+              m_ackStep=1;
+              SendEmptyPacket (TcpHeader::ACK);
+              optAckTest=false;
+           }
+
         }
       else if (m_delAckEvent.IsExpired ())
         {
+          
           m_delAckEvent = Simulator::Schedule (m_delAckTimeout,
                                                &TcpSocketBase::DelAckTimeout, this);
           NS_LOG_LOGIC (this << " scheduled delayed ACK at " <<
                         (Simulator::Now () + Simulator::GetDelayLeft (m_delAckEvent)).GetSeconds ());
         }
     }
-}
+}//THIS IS WHERE WE HAVE TO LOOK
 
 /**
  * \brief Estimate the RTT
