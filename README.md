@@ -15,7 +15,7 @@ Contributors:
 
 The example program is provided in the directory:   
 ``` scratch/optimisitc-ack-simulator.cc ```   
-execute the following command to save the variation of congestion window with time in a csv file 
+execute the following command to save the variation of congestion window with time in a csv file   
 ``` ./waf --run "scratch/optimisitc-ack-simulator --Opt-Ack = true --Save-CSV=true" ```
 
 ## References
